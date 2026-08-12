@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- viewport-fit=cover lets the layout reach under the status bar and home
+         indicator; the safe-area insets in index.css pad it back. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="description" content="What I own and which box it is in." />
+
+    <!-- Rewritten before first paint by the script below, so the iOS status bar
+         follows the manual override rather than the system scheme. -->
+    <meta id="theme-color" name="theme-color" content="#F6F7F5" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Inventory" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon-180.png" />
+
+    <title>Room Inventory</title>
+
+    <script>
+      // Runs before first paint so the correct scheme is on <html> already and
+      // there is no light-to-dark flash on a cold start from the Home Screen.
+      (function () {
+        try {
+          var saved = localStorage.getItem('room-inventory.theme')
+          var dark =
+            saved === 'dark' ||
+            (saved !== 'light' &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches)
+          if (dark) document.documentElement.classList.add('dark')
+          var meta = document.getElementById('theme-color')
+          if (meta) meta.setAttribute('content', dark ? '#0F1211' : '#F6F7F5')
+        } catch (e) {
+          /* private mode: fall through to the light default */
+        }
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

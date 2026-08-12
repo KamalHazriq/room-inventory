@@ -1,0 +1,190 @@
+@import 'tailwindcss';
+
+/* Self-hosted so the installed PWA makes no third-party font request and the
+   first paint from the Home Screen is already in the right typeface. Latin
+   subsets only: the app never renders Cyrillic, and the service worker
+   precaches every font file it is given. */
+@import '@fontsource-variable/instrument-sans/wght.css';
+@import '@fontsource/ibm-plex-mono/latin-400.css';
+@import '@fontsource/ibm-plex-mono/latin-500.css';
+
+/* The scheme class is set on <html> by the inline script in index.html. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* --------------------------------------------------------------------------
+   Palette lockdown.
+
+   PROMPT.md gives six colours per scheme and says to follow them exactly.
+   Wiping the default colour namespace means the whole Tailwind palette — every
+   grey, every blue, plus white and black — does not merely go unused. It does
+   not compile. The palette cannot leak by accident, only by editing this block.
+   -------------------------------------------------------------------------- */
+@theme {
+  --color-*: initial;
+}
+
+/* `inline` so the utilities resolve straight to --c-*, which the .dark block
+   below reassigns. One set of classes, both schemes, no dark: variant needed
+   for anything that is purely a token swap. */
+@theme inline {
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  --color-bg: var(--c-bg);
+  --color-surface: var(--c-surface);
+  --color-ink: var(--c-ink);
+  --color-muted: var(--c-muted);
+  --color-rule: var(--c-rule);
+  --color-accent: var(--c-accent);
+
+  --font-sans:
+    'Instrument Sans Variable', 'Instrument Sans', ui-sans-serif, system-ui,
+    -apple-system, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Hierarchy comes from spacing and colour, so the scale is tight and the
+     weights stay normal. Item names sit at --text-lg, not bold. */
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.125rem;
+  --text-base: 0.9375rem;
+  --text-base--line-height: 1.375rem;
+  --text-lg: 1.0625rem;
+  --text-lg--line-height: 1.5rem;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.625rem;
+  --text-masthead: 2.75rem;
+  --text-masthead--line-height: 1;
+
+  /* Radius discipline: the chip is the smallest thing on screen and nothing
+     else is allowed to be rounder than --radius-ui. No pills, no 2xl. */
+  --radius-chip: 3px;
+  --radius-ui: 6px;
+}
+
+@layer base {
+  :root {
+    --c-bg: #f6f7f5;
+    --c-surface: #ffffff;
+    --c-ink: #17191a;
+    --c-muted: #71767b;
+    --c-rule: #e2e5e1;
+    --c-accent: #2f5d50;
+    color-scheme: light;
+  }
+
+  .dark {
+    --c-bg: #0f1211;
+    --c-surface: #171b1a;
+    --c-ink: #ecefec;
+    --c-muted: #8a918d;
+    --c-rule: #262b29;
+    --c-accent: #6fbfa5;
+    color-scheme: dark;
+  }
+
+  html {
+    background-color: var(--c-bg);
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--c-bg);
+    color: var(--c-ink);
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    line-height: var(--text-base--line-height);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    /* iOS paints a grey box on every tap without this. */
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+  }
+
+  ::selection {
+    background-color: var(--c-accent);
+    color: var(--c-bg);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--c-accent);
+    outline-offset: 2px;
+    border-radius: var(--radius-chip);
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
+
+  /* iOS zooms the page when a control smaller than 16px takes focus. */
+  input,
+  select,
+  textarea {
+    font-size: 1rem;
+  }
+
+  input[type='search']::-webkit-search-decoration,
+  input[type='search']::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+  }
+
+  input[type='number'] {
+    -moz-appearance: textfield;
+  }
+
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
+/* The bottom of every screen clears the iPhone home indicator. */
+@utility pb-safe {
+  padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+}
+
+/* Anchored controls sit above the indicator rather than under it. */
+@utility bottom-safe {
+  bottom: max(1.25rem, calc(env(safe-area-inset-bottom) + 0.5rem));
+}
+
+/* Standalone mode puts the status bar over the page. */
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+/* --------------------------------------------------------------------------
+   Motion: results fade in on a 20ms stagger, the theme toggle cross-fades.
+   That is the entire motion budget.
+   -------------------------------------------------------------------------- */
+@keyframes room-rise {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@utility rise-in {
+  animation: room-rise 180ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
