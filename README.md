@@ -11,7 +11,11 @@ One room, a storage trolley, labelled boxes. The app answers two questions in un
 
 ## Start building
 
-Open this repo in Claude Code and paste [PROMPT.md](PROMPT.md) as the first message.
+Open this repo in Claude Code and say:
+
+> Read PROMPT.md and BUILD-ORDER.md, then build it.
+
+[PROMPT.md](PROMPT.md) is the brief. [BUILD-ORDER.md](BUILD-ORDER.md) says what to build before the Firebase project exists, and what to leave alone until it does.
 
 Planned stack: Vite + React + TypeScript, Tailwind, Firebase (Firestore + Google auth), installable PWA deployed to GitHub Pages.
 
