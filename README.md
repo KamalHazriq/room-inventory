@@ -13,9 +13,11 @@ One room, a storage trolley, labelled boxes. The app answers two questions in un
 
 Open this repo in Claude Code and say:
 
-> Read PROMPT.md and BUILD-ORDER.md, then build it.
+> Read PROMPT.md, BUILD-ORDER.md and DESIGN-CHECK.md, then build it.
 
-[PROMPT.md](PROMPT.md) is the brief. [BUILD-ORDER.md](BUILD-ORDER.md) says what to build before the Firebase project exists, and what to leave alone until it does.
+- [PROMPT.md](PROMPT.md) — the brief
+- [BUILD-ORDER.md](BUILD-ORDER.md) — what to build before the Firebase project exists, and what to leave alone until it does
+- [DESIGN-CHECK.md](DESIGN-CHECK.md) — how to keep the UI from drifting into generic AI output
 
 Planned stack: Vite + React + TypeScript, Tailwind, Firebase (Firestore + Google auth), installable PWA deployed to GitHub Pages.
 
