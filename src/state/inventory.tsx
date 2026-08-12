@@ -11,6 +11,7 @@ import { repo } from '../data'
 import { compareContainers } from '../data/defaults'
 import type {
   Container,
+  ContainerPatch,
   Item,
   ItemPatch,
   NewContainer,
@@ -35,6 +36,9 @@ interface InventoryValue {
   updateItem: (id: string, patch: ItemPatch) => Promise<void>
   deleteItem: (id: string) => Promise<void>
   addContainer: (input: NewContainer) => Promise<Container>
+  updateContainer: (code: string, patch: ContainerPatch) => Promise<void>
+  renameContainer: (from: string, to: string) => Promise<void>
+  deleteContainer: (code: string, reassignTo: string) => Promise<void>
 }
 
 const InventoryContext = createContext<InventoryValue | null>(null)
@@ -92,6 +96,37 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     return created
   }, [])
 
+  const updateContainer = useCallback(async (code: string, patch: ContainerPatch) => {
+    await repo.updateContainer(code, patch)
+    setSnapshot((s) => ({
+      ...s,
+      containers: s.containers.map((c) => (c.code === code ? { ...c, ...patch } : c)),
+    }))
+  }, [])
+
+  const renameContainer = useCallback(async (from: string, to: string) => {
+    const next = to.toUpperCase()
+    await repo.renameContainer(from, next)
+    setSnapshot((s) => ({
+      ...s,
+      containers: s.containers.map((c) => (c.code === from ? { ...c, code: next } : c)),
+      items: s.items.map((item) =>
+        item.containerCode === from ? { ...item, containerCode: next } : item,
+      ),
+    }))
+  }, [])
+
+  const deleteContainer = useCallback(async (code: string, reassignTo: string) => {
+    await repo.deleteContainer(code, reassignTo)
+    setSnapshot((s) => ({
+      ...s,
+      containers: s.containers.filter((c) => c.code !== code),
+      items: s.items.map((item) =>
+        item.containerCode === code ? { ...item, containerCode: reassignTo } : item,
+      ),
+    }))
+  }, [])
+
   const containers = useMemo(
     () => [...snapshot.containers].sort(compareContainers),
     [snapshot.containers],
@@ -128,6 +163,9 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       updateItem,
       deleteItem,
       addContainer,
+      updateContainer,
+      renameContainer,
+      deleteContainer,
     }),
     [
       status,
@@ -142,6 +180,9 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       updateItem,
       deleteItem,
       addContainer,
+      updateContainer,
+      renameContainer,
+      deleteContainer,
     ],
   )
 

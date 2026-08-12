@@ -5,6 +5,7 @@ import type {
   AuthApi,
   AuthState,
   Container,
+  ContainerPatch,
   Item,
   ItemPatch,
   NewContainer,
@@ -131,6 +132,41 @@ export const localRepo: Repo = {
     snapshot.containers.push(container)
     write(snapshot)
     return container
+  },
+
+  async updateContainer(code: string, patch: ContainerPatch) {
+    const snapshot = read()
+    const at = snapshot.containers.findIndex((c) => c.code === code)
+    if (at === -1) throw new Error(`No container ${code}`)
+    snapshot.containers[at] = { ...snapshot.containers[at], ...patch }
+    write(snapshot)
+  },
+
+  async renameContainer(from: string, to: string) {
+    const next = to.toUpperCase()
+    const snapshot = read()
+    const at = snapshot.containers.findIndex((c) => c.code === from)
+    if (at === -1) throw new Error(`No container ${from}`)
+    if (snapshot.containers.some((c) => c.code === next)) {
+      throw new Error(`${next} already exists.`)
+    }
+    snapshot.containers[at] = { ...snapshot.containers[at], code: next }
+    snapshot.items = snapshot.items.map((item) =>
+      item.containerCode === from ? { ...item, containerCode: next } : item,
+    )
+    write(snapshot)
+  },
+
+  async deleteContainer(code: string, reassignTo: string) {
+    const snapshot = read()
+    if (!snapshot.containers.some((c) => c.code === reassignTo)) {
+      throw new Error(`No container ${reassignTo} to move the contents into.`)
+    }
+    snapshot.items = snapshot.items.map((item) =>
+      item.containerCode === code ? { ...item, containerCode: reassignTo } : item,
+    )
+    snapshot.containers = snapshot.containers.filter((c) => c.code !== code)
+    write(snapshot)
   },
 }
 

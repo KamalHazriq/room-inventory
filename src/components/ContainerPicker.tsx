@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useInventory } from '../state/inventory'
-import { Button, Field } from './ui'
+import { Button, Field, Select } from './ui'
 
 const NEW_VALUE = '__new__'
 
@@ -76,20 +76,13 @@ export function ContainerPicker({
             onChange={(event) => setContainerLabel(event.target.value)}
             placeholder="Trolley tier 4"
           />
-          <label className="block">
-            <span className="mb-1.5 block text-sm text-muted">Zone</span>
-            <select
-              value={zoneId}
-              onChange={(event) => setZoneId(event.target.value)}
-              className="min-h-[44px] w-full appearance-none rounded-ui border border-rule bg-surface px-3 text-ink"
-            >
-              {zones.map((zone) => (
-                <option key={zone.id} value={zone.id}>
-                  {zone.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <Select label="Zone" value={zoneId} onChange={setZoneId}>
+            {zones.map((zone) => (
+              <option key={zone.id} value={zone.id}>
+                {zone.name}
+              </option>
+            ))}
+          </Select>
           {error ? <p className="text-sm text-muted">{error}</p> : null}
           <div className="flex gap-2">
             <Button variant="primary" onClick={createContainer} disabled={saving}>
@@ -111,45 +104,24 @@ export function ContainerPicker({
   }
 
   return (
-    <label className="block">
-      <span className="mb-1.5 block text-sm text-muted">{label}</span>
-      <div className="relative">
-        <select
-          value={value}
-          onChange={(event) => {
-            if (event.target.value === NEW_VALUE) {
-              setCreating(true)
-              return
-            }
-            onChange(event.target.value)
-          }}
-          className="min-h-[44px] w-full appearance-none rounded-ui border border-rule bg-surface py-2.5 pr-10 pl-3 text-ink"
-        >
-          {containers.map((container) => (
-            <option key={container.code} value={container.code}>
-              {container.code} — {container.label}
-              {zoneName(container.zoneId) ? ` (${zoneName(container.zoneId)})` : ''}
-            </option>
-          ))}
-          <option value={NEW_VALUE}>New container…</option>
-        </select>
-        <svg
-          className="pointer-events-none absolute top-1/2 right-3.5 -translate-y-1/2 text-muted"
-          width="10"
-          height="6"
-          viewBox="0 0 10 6"
-          fill="none"
-          aria-hidden="true"
-        >
-          <path
-            d="M1 1l4 4 4-4"
-            stroke="currentColor"
-            strokeWidth="1.25"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </div>
-    </label>
+    <Select
+      label={label}
+      value={value}
+      onChange={(next) => {
+        if (next === NEW_VALUE) {
+          setCreating(true)
+          return
+        }
+        onChange(next)
+      }}
+    >
+      {containers.map((container) => (
+        <option key={container.code} value={container.code}>
+          {container.code} — {container.label}
+          {zoneName(container.zoneId) ? ` (${zoneName(container.zoneId)})` : ''}
+        </option>
+      ))}
+      <option value={NEW_VALUE}>New container…</option>
+    </Select>
   )
 }

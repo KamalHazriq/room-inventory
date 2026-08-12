@@ -3,15 +3,19 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  query,
   setDoc,
   Timestamp,
   updateDoc,
+  where,
+  writeBatch,
   type DocumentData,
 } from 'firebase/firestore'
-import { firestore } from './firebase'
+import { firestore } from './firestoreDb'
 import { firebaseAuthApi } from './firebaseAuth'
 import type {
   Container,
+  ContainerPatch,
   Item,
   ItemPatch,
   NewContainer,
@@ -46,17 +50,60 @@ function toItem(id: string, data: DocumentData): Item {
  * Firestore rejections mean "signed in, but not the allowed UID". Routing them
  * through the auth API turns a dead screen into the access-denied state.
  */
-function rethrow(error: unknown): never {
+function report(error: unknown): void {
   if ((error as { code?: string }).code === 'permission-denied') {
     firebaseAuthApi.reportUnauthorised()
   }
+}
+
+function rethrow(error: unknown): never {
+  report(error)
   throw error
+}
+
+/** How long to wait for a server acknowledgement before assuming we are offline. */
+const ACK_TIMEOUT_MS = 1200
+
+/**
+ * A Firestore write promise does not settle until the server acknowledges it,
+ * so offline it stays pending forever and any UI that awaits it hangs on
+ * "Saving…". The write is already in the local cache and the outbound queue by
+ * then, so waiting past this point buys nothing.
+ *
+ * Give the server a moment to object — a rules rejection arrives fast and
+ * should still surface — then let the UI move on. Genuine failures that arrive
+ * later are still reported.
+ */
+async function settleOrQueue(write: Promise<unknown>): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const acknowledged = write.then(
+    () => true as const,
+    (error) => {
+      report(error)
+      throw error
+    },
+  )
+
+  try {
+    await Promise.race([
+      acknowledged,
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, ACK_TIMEOUT_MS)
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+
+  // The write is still in flight. Keep watching it so a late rejection is not
+  // swallowed, but do not make the interface wait.
+  void acknowledged.catch(() => {})
 }
 
 export const firebaseRepo: Repo = {
   /**
    * One read of everything on open. At 50 to 200 items this is a couple of
-   * small queries, and every search afterwards runs against memory.
+   * small queries, and with the persistent cache it also succeeds offline.
    */
   async load(): Promise<Snapshot> {
     try {
@@ -89,63 +136,102 @@ export const firebaseRepo: Repo = {
   },
 
   async addItem(input: NewItem): Promise<Item> {
-    try {
-      const db = firestore()
-      const ref = doc(collection(db, 'items'))
-      const now = Timestamp.now()
-      const payload = {
-        name: input.name,
-        aliases: input.aliases,
-        containerCode: input.containerCode,
-        status: input.status ?? 'have',
-        qty: input.qty,
-        notes: input.notes,
-        createdAt: now,
-        lastSeenAt: now,
-      }
-      await setDoc(ref, payload)
-      return toItem(ref.id, payload)
-    } catch (error) {
-      rethrow(error)
+    const db = firestore()
+    const ref = doc(collection(db, 'items'))
+    const now = Timestamp.now()
+    const payload = {
+      name: input.name,
+      aliases: input.aliases,
+      containerCode: input.containerCode,
+      status: input.status ?? 'have',
+      qty: input.qty,
+      notes: input.notes,
+      createdAt: now,
+      lastSeenAt: now,
     }
+    // The id is generated on the client, so the item is complete without
+    // waiting for the server to hear about it.
+    await settleOrQueue(setDoc(ref, payload))
+    return toItem(ref.id, payload)
   },
 
   async updateItem(id: string, patch: ItemPatch): Promise<void> {
-    try {
-      const payload: DocumentData = { ...patch }
-      if (patch.lastSeenAt !== undefined) {
-        payload.lastSeenAt = Timestamp.fromMillis(patch.lastSeenAt)
-      }
-      await updateDoc(doc(firestore(), 'items', id), payload)
-    } catch (error) {
-      rethrow(error)
+    const payload: DocumentData = { ...patch }
+    if (patch.lastSeenAt !== undefined) {
+      payload.lastSeenAt = Timestamp.fromMillis(patch.lastSeenAt)
     }
+    await settleOrQueue(updateDoc(doc(firestore(), 'items', id), payload))
   },
 
   async deleteItem(id: string): Promise<void> {
+    await settleOrQueue(deleteDoc(doc(firestore(), 'items', id)))
+  },
+
+  async addContainer(input: NewContainer): Promise<Container> {
+    const code = input.code.toUpperCase()
+    const container: Container = {
+      code,
+      zoneId: input.zoneId,
+      label: input.label,
+      order: input.order ?? 50,
+    }
+    // The code IS the doc id, so this also enforces uniqueness.
+    await settleOrQueue(
+      setDoc(doc(firestore(), 'containers', code), {
+        zoneId: container.zoneId,
+        label: container.label,
+        order: container.order,
+      }),
+    )
+    return container
+  },
+
+  async updateContainer(code: string, patch: ContainerPatch): Promise<void> {
+    await settleOrQueue(updateDoc(doc(firestore(), 'containers', code), { ...patch }))
+  },
+
+  async renameContainer(from: string, to: string): Promise<void> {
+    const next = to.toUpperCase()
+    const db = firestore()
+
     try {
-      await deleteDoc(doc(firestore(), 'items', id))
+      const [existing, current, contents] = await Promise.all([
+        getDocs(query(collection(db, 'containers'), where('__name__', '==', next))),
+        getDocs(query(collection(db, 'containers'), where('__name__', '==', from))),
+        getDocs(query(collection(db, 'items'), where('containerCode', '==', from))),
+      ])
+
+      if (!existing.empty) throw new Error(`${next} already exists.`)
+      if (current.empty) throw new Error(`No container ${from}.`)
+
+      // One batch, so the new container, the repointed items and the removal of
+      // the old code either all land or none of them do.
+      const batch = writeBatch(db)
+      batch.set(doc(db, 'containers', next), current.docs[0].data())
+      for (const item of contents.docs) {
+        batch.update(item.ref, { containerCode: next })
+      }
+      batch.delete(doc(db, 'containers', from))
+      await settleOrQueue(batch.commit())
     } catch (error) {
       rethrow(error)
     }
   },
 
-  async addContainer(input: NewContainer): Promise<Container> {
+  async deleteContainer(code: string, reassignTo: string): Promise<void> {
+    const db = firestore()
+
     try {
-      const code = input.code.toUpperCase()
-      const container: Container = {
-        code,
-        zoneId: input.zoneId,
-        label: input.label,
-        order: input.order ?? 50,
+      const contents = await getDocs(
+        query(collection(db, 'items'), where('containerCode', '==', code)),
+      )
+
+      const batch = writeBatch(db)
+      for (const item of contents.docs) {
+        batch.update(item.ref, { containerCode: reassignTo })
       }
-      // The code IS the doc id, so this also enforces uniqueness.
-      await setDoc(doc(firestore(), 'containers', code), {
-        zoneId: container.zoneId,
-        label: container.label,
-        order: container.order,
-      })
-      return container
+      batch.delete(doc(db, 'containers', code))
+      await settleOrQueue(batch.commit())
     } catch (error) {
       rethrow(error)
     }

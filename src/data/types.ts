@@ -58,6 +58,8 @@ export type ItemPatch = Partial<
 export type NewContainer = Pick<Container, 'code' | 'zoneId' | 'label'> &
   Partial<Pick<Container, 'order'>>
 
+export type ContainerPatch = Partial<Pick<Container, 'label' | 'zoneId' | 'order'>>
+
 /**
  * The one seam between the app and its storage. `local` and `firebase` both
  * implement this, so swapping them is an env change rather than a rewrite.
@@ -68,6 +70,14 @@ export interface Repo {
   updateItem(id: string, patch: ItemPatch): Promise<void>
   deleteItem(id: string): Promise<void>
   addContainer(input: NewContainer): Promise<Container>
+  updateContainer(code: string, patch: ContainerPatch): Promise<void>
+  /**
+   * The code is the document id, so changing it means writing a new container,
+   * repointing every item inside it, and deleting the old one.
+   */
+  renameContainer(from: string, to: string): Promise<void>
+  /** Items in the deleted container move to `reassignTo` rather than orphaning. */
+  deleteContainer(code: string, reassignTo: string): Promise<void>
 }
 
 export type AuthState =

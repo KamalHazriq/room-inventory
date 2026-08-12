@@ -261,6 +261,65 @@ It runs [impeccable](https://github.com/pbakaus/impeccable)'s detectors too
 
 ---
 
+## Checks
+
+```bash
+npm test          # search ranking, CSV parsing, container moves, relative time
+npm run typecheck
+npm run design-check
+```
+
+All three run in CI before anything deploys.
+
+The tests concentrate on the parts with real logic and real edge cases: the
+search ranking, the CSV reader, and the container operations that have to carry
+their contents with them. Search in particular earned its suite — an early
+version matched the query as one contiguous string, so `anker charger` found
+nothing at all while "Anker 65W charger" sat in the box.
+
+## How search matches
+
+Every word in the query has to land somewhere on the item — name, aliases,
+container code or notes — in any order, and the item is ranked by its weakest
+word. A contiguous run of the whole query in the name still wins outright, so
+typing the start of a name puts it top.
+
+That means `anker charger`, `charger anker` and `black pens` all work. It is
+deliberately not fuzzy: `hmdi` will not find HDMI. Deterministic matching is
+easier to trust when you are standing in front of a box.
+
+## Offline
+
+Firestore's IndexedDB cache is on, so the app opens with the last known
+inventory when there is no signal, and edits made in a dead spot queue and sync
+when there is one again. The search screen says `Offline — changes will sync`
+while that is the case.
+
+One thing worth knowing about the implementation: a Firestore write promise does
+not settle until the server acknowledges it, so offline it stays pending
+forever. `settleOrQueue` in `src/data/firebaseRepo.ts` gives the server a moment
+to object — a rules rejection arrives fast and still surfaces — then lets the
+interface move on, since the write is already in the local cache and the
+outbound queue by then.
+
+## Bundle
+
+The Firebase SDK is most of the JavaScript here, and it loads in three pieces
+rather than one:
+
+| chunk | gzip | when |
+| --- | --- | --- |
+| app shell | 84 KB | first paint |
+| firebase auth | 35 KB | to render the sign-in gate |
+| firestore | 98 KB | only once you are signed in |
+
+`src/data/index.ts` imports both data implementations dynamically, and
+`src/data/firebase.ts` deliberately imports neither `firebase/auth` nor
+`firebase/firestore` — a shared import there would collapse the last two rows
+back into one chunk that has to arrive before anything paints.
+
+---
+
 ## Things left undone, deliberately
 
 Waiting on the Firebase console:
@@ -275,6 +334,22 @@ Not built, per the brief: photos, voice, barcodes, categories, prices, sharing,
 dashboards, move history, a separate "checked out" flag, and any client-side
 gate pretending to be security.
 
-One addition beyond the four screens: the container picker on **Add item** has
-a **New container…** row, so a new box can be filed without re-running the seed
-script. It is a small inline form, not a fifth screen.
+## Beyond the four screens
+
+Two additions, both agreed rather than assumed, and neither is a fifth screen:
+
+**Containers are fully editable.** The picker on Add item has a **New
+container…** row. The container screen has **Edit container** (code, label,
+zone) and **Delete container**. Renaming a code rewrites every item inside it in
+one batch, because the code *is* the document id. Deleting a container refiles
+its contents into `OUT` rather than orphaning them, and says so before you
+confirm. `OUT` itself cannot be deleted, since it is where everything else
+lands.
+
+**Add item warns about duplicates.** Typing a name that closely matches
+something you already own shows a quiet line — "You may already have this: HDMI
+cable 2m in T2" — tappable straight through to the item. Name matches only; a
+word buried in someone's notes is not a duplicate.
+
+Zones are still fixed in `src/data/defaults.ts` and have no UI. Containers point
+at them, and the seed script creates them.

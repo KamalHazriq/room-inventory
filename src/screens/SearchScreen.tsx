@@ -5,6 +5,7 @@ import { ItemRow } from '../components/ItemRow'
 import { ThemeToggle } from '../components/ThemeToggle'
 import { Screen, SectionLabel } from '../components/ui'
 import { OUT_CODE } from '../data/defaults'
+import { useOnline } from '../lib/useOnline'
 import { searchItems } from '../search/search'
 import { useInventory } from '../state/inventory'
 
@@ -13,6 +14,7 @@ export function SearchScreen() {
   const query = params.get('q') ?? ''
   const inputRef = useRef<HTMLInputElement>(null)
   const { status, error, items, containers, liveCountFor, reload } = useInventory()
+  const online = useOnline()
 
   // Autofocus on desktop only. On a phone an instant keyboard covers half the
   // screen before you have decided what you are looking for.
@@ -38,7 +40,11 @@ export function SearchScreen() {
       <div className="sticky top-0 z-10 bg-bg pt-safe">
         <Screen>
           <header className="flex items-center justify-between pt-3 pb-1">
-            <span className="text-sm text-muted">Room inventory</span>
+            {/* Edits made offline apply locally and sync later, so the only
+                thing needed here is to say so rather than to block anything. */}
+            <span className="text-sm text-muted">
+              {online ? 'Room inventory' : 'Offline — changes will sync'}
+            </span>
             <ThemeToggle />
           </header>
           <div className="pb-3">

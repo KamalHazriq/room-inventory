@@ -1,14 +1,20 @@
 import {
   browserLocalPersistence,
+  getAuth,
   GoogleAuthProvider,
   onAuthStateChanged,
   setPersistence,
   signInWithPopup,
   signOut,
+  type Auth,
   type User,
 } from 'firebase/auth'
-import { ALLOWED_UID, firebaseAuth, missingConfig } from './firebase'
+import { ALLOWED_UID, getFirebaseApp, missingConfig } from './firebase'
 import type { AuthApi, AuthState } from './types'
+
+function firebaseAuth(): Auth {
+  return getAuth(getFirebaseApp())
+}
 
 const listeners = new Set<(state: AuthState) => void>()
 let current: AuthState = { status: 'loading' }

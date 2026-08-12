@@ -1,7 +1,13 @@
 import { initializeApp, type FirebaseApp } from 'firebase/app'
-import { getAuth, type Auth } from 'firebase/auth'
-import { getFirestore, type Firestore } from 'firebase/firestore'
 
+/**
+ * App and config only.
+ *
+ * Nothing here may import firebase/auth or firebase/firestore. Both of those
+ * are large, they are needed at different moments — auth before sign-in,
+ * Firestore only after — and a shared import would collapse them back into one
+ * chunk that has to arrive before anything paints.
+ */
 const config = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -35,15 +41,7 @@ export function missingConfig(): string[] {
 
 let app: FirebaseApp | undefined
 
-function getApp(): FirebaseApp {
+export function getFirebaseApp(): FirebaseApp {
   if (!app) app = initializeApp(config)
   return app
-}
-
-export function firebaseAuth(): Auth {
-  return getAuth(getApp())
-}
-
-export function firestore(): Firestore {
-  return getFirestore(getApp())
 }

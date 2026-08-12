@@ -83,6 +83,56 @@ export function TextArea({
   )
 }
 
+function ChevronDown() {
+  return (
+    <svg
+      className="pointer-events-none absolute top-1/2 right-3.5 -translate-y-1/2 text-muted"
+      width="10"
+      height="6"
+      viewBox="0 0 10 6"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M1 1l4 4 4-4"
+        stroke="currentColor"
+        strokeWidth="1.25"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+/** Native select, so iOS provides its own wheel picker and a real tap target. */
+export function Select({
+  label,
+  value,
+  onChange,
+  children,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  children: ReactNode
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-sm text-muted">{label}</span>
+      <div className="relative">
+        <select
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="min-h-[44px] w-full appearance-none rounded-ui border border-rule bg-surface py-2.5 pr-10 pl-3 text-ink"
+        >
+          {children}
+        </select>
+        <ChevronDown />
+      </div>
+    </label>
+  )
+}
+
 function Chevron() {
   return (
     <svg width="7" height="12" viewBox="0 0 7 12" fill="none" aria-hidden="true">

@@ -13,35 +13,54 @@ export interface SearchResults {
   gone: Item[]
 }
 
-/**
- * Match tiers, lowest first. Name beats everything, per the brief; a prefix
- * match beats a match buried mid-word because that is what typing feels like.
- */
 const NO_MATCH = 99
+
+/**
+ * Where a single word landed, best first. Name beats everything, per the
+ * brief; a prefix match beats one buried mid-word, because that is what typing
+ * feels like.
+ */
 const NAME_PREFIX = 0
 const NAME_CONTAINS = 1
-const ALIAS_PREFIX = 2
-const ALIAS_CONTAINS = 3
-const CODE_MATCH = 4
-const NOTES_MATCH = 5
+const ALIAS = 2
+const CODE = 3
+const NOTES = 4
 
-function rank(item: Item, needle: string): number {
+function tokenTier(item: Item, token: string): number {
   const name = item.name.toLowerCase()
-  if (name.startsWith(needle)) return NAME_PREFIX
-  if (name.includes(needle)) return NAME_CONTAINS
+  if (name.startsWith(token)) return NAME_PREFIX
+  if (name.includes(token)) return NAME_CONTAINS
 
-  let best = NO_MATCH
   for (const alias of item.aliases) {
-    const a = alias.toLowerCase()
-    if (a.startsWith(needle)) return ALIAS_PREFIX
-    if (a.includes(needle)) best = Math.min(best, ALIAS_CONTAINS)
+    if (alias.toLowerCase().includes(token)) return ALIAS
   }
-  if (best !== NO_MATCH) return best
-
-  if (item.containerCode.toLowerCase().includes(needle)) return CODE_MATCH
-  if (item.notes.toLowerCase().includes(needle)) return NOTES_MATCH
+  if (item.containerCode.toLowerCase().includes(token)) return CODE
+  if (item.notes.toLowerCase().includes(token)) return NOTES
 
   return NO_MATCH
+}
+
+/**
+ * Every word in the query has to land somewhere on the item, in any order, and
+ * the item is judged by its weakest word. Matching the query as one contiguous
+ * string would mean "anker charger" missed "Anker 65W charger", which is the
+ * most natural thing in the world to type while standing in front of a box.
+ *
+ * A contiguous hit on the name still wins outright, so typing the start of a
+ * name puts it top where you expect it.
+ */
+function rank(item: Item, tokens: string[], phrase: string): number {
+  const name = item.name.toLowerCase()
+  if (name.startsWith(phrase)) return 0
+  if (name.includes(phrase)) return 1
+
+  let weakest = 0
+  for (const token of tokens) {
+    const tier = tokenTier(item, token)
+    if (tier === NO_MATCH) return NO_MATCH
+    weakest = Math.max(weakest, tier)
+  }
+  return 2 + weakest
 }
 
 function byRankThenName(a: [Item, number], b: [Item, number]): number {
@@ -50,19 +69,21 @@ function byRankThenName(a: [Item, number], b: [Item, number]): number {
 }
 
 /**
- * Case-insensitive substring across name, aliases, containerCode and notes,
- * run over the whole collection in memory. At 200 items this is instant and
- * forgiving in a way a server query would not be.
+ * Case-insensitive matching across name, aliases, containerCode and notes, run
+ * over the whole collection in memory. At 200 items this is instant and more
+ * forgiving than a server query would be.
  */
 export function searchItems(items: Item[], query: string): SearchResults {
-  const needle = query.trim().toLowerCase()
-  if (!needle) return { live: [], gone: [] }
+  const phrase = query.trim().toLowerCase().replace(/\s+/g, ' ')
+  if (!phrase) return { live: [], gone: [] }
+
+  const tokens = phrase.split(' ').filter(Boolean)
 
   const live: Array<[Item, number]> = []
   const gone: Array<[Item, number]> = []
 
   for (const item of items) {
-    const score = rank(item, needle)
+    const score = rank(item, tokens, phrase)
     if (score === NO_MATCH) continue
     ;(item.status === 'gone' ? gone : live).push([item, score])
   }
@@ -75,4 +96,26 @@ export function searchItems(items: Item[], query: string): SearchResults {
 
   gone.sort(byRankThenName)
   return { live: live.map(([i]) => i), gone: gone.map(([i]) => i) }
+}
+
+/**
+ * Items that look like the one being typed on the Add screen, so a second HDMI
+ * cable is caught before it becomes a second record. Name-tier matches only:
+ * a hit buried in someone's notes is not a duplicate.
+ */
+export function likelyDuplicates(items: Item[], name: string, limit = 3): Item[] {
+  const phrase = name.trim().toLowerCase().replace(/\s+/g, ' ')
+  if (phrase.length < 3) return []
+
+  const tokens = phrase.split(' ').filter(Boolean)
+
+  return items
+    .filter((item) => item.status === 'have')
+    .map((item) => [item, rank(item, tokens, phrase)] as [Item, number])
+    // 2 + NAME_CONTAINS is the weakest tier that still means every word landed
+    // on the name itself.
+    .filter(([, score]) => score <= 2 + NAME_CONTAINS)
+    .sort(byRankThenName)
+    .slice(0, limit)
+    .map(([item]) => item)
 }

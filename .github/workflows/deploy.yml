@@ -28,6 +28,15 @@ jobs:
 
       - run: npm ci
 
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Design check
+        run: npm run design-check
+
       - name: Build
         env:
           # Repo → Settings → Secrets and variables → Actions.
