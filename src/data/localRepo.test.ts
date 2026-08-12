@@ -21,7 +21,7 @@ const storage = new MemoryStorage()
 Object.defineProperty(globalThis, 'localStorage', { value: storage, writable: true })
 
 const { localRepo } = await import('./localRepo')
-const { OUT_CODE } = await import('./defaults')
+const { OUT_CODE, NOT_FILED_ZONE: OUT_ZONE } = await import('./defaults')
 
 beforeEach(() => {
   storage.clear()
@@ -125,6 +125,60 @@ describe('localRepo', () => {
       await expect(localRepo.deleteContainer('T1', 'NOPE')).rejects.toThrow(/NOPE/)
       const after = await localRepo.load()
       expect(after.containers.some((c) => c.code === 'T1')).toBe(true)
+    })
+  })
+
+  describe('zones', () => {
+    it('derives a readable id from the name', async () => {
+      const created = await localRepo.addZone({ name: 'Behind the door' })
+      expect(created.id).toBe('behind-the-door')
+    })
+
+    it('does not collide when two zones share a name', async () => {
+      const first = await localRepo.addZone({ name: 'Shelf' })
+      const second = await localRepo.addZone({ name: 'Shelf' })
+      expect(second.id).not.toBe(first.id)
+      expect(second.id).toBe('shelf-2')
+    })
+
+    it('rejects a blank name', async () => {
+      await expect(localRepo.addZone({ name: '  ' })).rejects.toThrow(/name/i)
+    })
+
+    it('renames a zone without disturbing its containers', async () => {
+      const before = await localRepo.load()
+      const inTrolley = before.containers.filter((c) => c.zoneId === 'trolley').length
+      await localRepo.updateZone('trolley', { name: 'The trolley' })
+
+      const after = await localRepo.load()
+      expect(after.zones.find((z) => z.id === 'trolley')?.name).toBe('The trolley')
+      expect(after.containers.filter((c) => c.zoneId === 'trolley')).toHaveLength(inTrolley)
+    })
+
+    it('deleting a zone refiles its containers rather than orphaning them', async () => {
+      const before = await localRepo.load()
+      const moving = before.containers.filter((c) => c.zoneId === 'trolley').length
+      const notFiledBefore = before.containers.filter((c) => c.zoneId === OUT_ZONE).length
+      expect(moving).toBeGreaterThan(0)
+
+      await localRepo.deleteZone('trolley', OUT_ZONE)
+
+      const after = await localRepo.load()
+      expect(after.zones.some((z) => z.id === 'trolley')).toBe(false)
+      expect(after.containers).toHaveLength(before.containers.length)
+      expect(after.containers.filter((c) => c.zoneId === OUT_ZONE)).toHaveLength(
+        notFiledBefore + moving,
+      )
+    })
+
+    it('refuses to delete the zone everything else falls back to', async () => {
+      await expect(localRepo.deleteZone(OUT_ZONE, 'trolley')).rejects.toThrow(/cannot be deleted/i)
+    })
+
+    it('refuses to delete into a zone that does not exist', async () => {
+      await expect(localRepo.deleteZone('trolley', 'nope')).rejects.toThrow(/nope/)
+      const after = await localRepo.load()
+      expect(after.zones.some((z) => z.id === 'trolley')).toBe(true)
     })
   })
 })

@@ -11,6 +11,7 @@ import {
   writeBatch,
   type DocumentData,
 } from 'firebase/firestore'
+import { NOT_FILED_ZONE, zoneIdFor } from './defaults'
 import { firestore } from './firestoreDb'
 import { firebaseAuthApi } from './firebaseAuth'
 import type {
@@ -20,9 +21,11 @@ import type {
   ItemPatch,
   NewContainer,
   NewItem,
+  NewZone,
   Repo,
   Snapshot,
   Zone,
+  ZonePatch,
 } from './types'
 
 function millis(value: unknown, fallback: number): number {
@@ -231,6 +234,50 @@ export const firebaseRepo: Repo = {
         batch.update(item.ref, { containerCode: reassignTo })
       }
       batch.delete(doc(db, 'containers', code))
+      await settleOrQueue(batch.commit())
+    } catch (error) {
+      rethrow(error)
+    }
+  },
+
+  async addZone(input: NewZone): Promise<Zone> {
+    const db = firestore()
+    const name = input.name.trim()
+    if (!name) throw new Error('A zone needs a name.')
+
+    try {
+      const existing = await getDocs(collection(db, 'zones'))
+      const id = input.id ?? zoneIdFor(name, new Set(existing.docs.map((d) => d.id)))
+      if (existing.docs.some((d) => d.id === id)) throw new Error(`Zone ${id} already exists.`)
+
+      const zone: Zone = { id, name, order: input.order ?? existing.size + 1 }
+      await settleOrQueue(
+        setDoc(doc(db, 'zones', id), { name: zone.name, order: zone.order }),
+      )
+      return zone
+    } catch (error) {
+      rethrow(error)
+    }
+  },
+
+  async updateZone(id: string, patch: ZonePatch): Promise<void> {
+    await settleOrQueue(updateDoc(doc(firestore(), 'zones', id), { ...patch }))
+  },
+
+  async deleteZone(id: string, reassignTo: string): Promise<void> {
+    if (id === NOT_FILED_ZONE) throw new Error('The "Not filed" zone cannot be deleted.')
+    const db = firestore()
+
+    try {
+      const affected = await getDocs(
+        query(collection(db, 'containers'), where('zoneId', '==', id)),
+      )
+
+      const batch = writeBatch(db)
+      for (const container of affected.docs) {
+        batch.update(container.ref, { zoneId: reassignTo })
+      }
+      batch.delete(doc(db, 'zones', id))
       await settleOrQueue(batch.commit())
     } catch (error) {
       rethrow(error)

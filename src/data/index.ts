@@ -67,6 +67,15 @@ export const repo: Repo = {
   async deleteContainer(code, reassignTo) {
     return (await loadRepo()).deleteContainer(code, reassignTo)
   },
+  async addZone(input) {
+    return (await loadRepo()).addZone(input)
+  },
+  async updateZone(id, patch) {
+    return (await loadRepo()).updateZone(id, patch)
+  },
+  async deleteZone(id, reassignTo) {
+    return (await loadRepo()).deleteZone(id, reassignTo)
+  },
 }
 
 export const auth: AuthApi = {

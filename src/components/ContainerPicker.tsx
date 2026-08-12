@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useInventory } from '../state/inventory'
 import { Button, Field, Select } from './ui'
+import { ZonePicker } from './ZonePicker'
 
 const NEW_VALUE = '__new__'
 
@@ -76,13 +77,7 @@ export function ContainerPicker({
             onChange={(event) => setContainerLabel(event.target.value)}
             placeholder="Trolley tier 4"
           />
-          <Select label="Zone" value={zoneId} onChange={setZoneId}>
-            {zones.map((zone) => (
-              <option key={zone.id} value={zone.id}>
-                {zone.name}
-              </option>
-            ))}
-          </Select>
+          <ZonePicker value={zoneId} onChange={setZoneId} />
           {error ? <p className="text-sm text-muted">{error}</p> : null}
           <div className="flex gap-2">
             <Button variant="primary" onClick={createContainer} disabled={saving}>

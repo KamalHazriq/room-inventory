@@ -60,6 +60,10 @@ export type NewContainer = Pick<Container, 'code' | 'zoneId' | 'label'> &
 
 export type ContainerPatch = Partial<Pick<Container, 'label' | 'zoneId' | 'order'>>
 
+export type NewZone = Pick<Zone, 'name'> & Partial<Pick<Zone, 'id' | 'order'>>
+
+export type ZonePatch = Partial<Pick<Zone, 'name' | 'order'>>
+
 /**
  * The one seam between the app and its storage. `local` and `firebase` both
  * implement this, so swapping them is an env change rather than a rewrite.
@@ -78,6 +82,10 @@ export interface Repo {
   renameContainer(from: string, to: string): Promise<void>
   /** Items in the deleted container move to `reassignTo` rather than orphaning. */
   deleteContainer(code: string, reassignTo: string): Promise<void>
+  addZone(input: NewZone): Promise<Zone>
+  updateZone(id: string, patch: ZonePatch): Promise<void>
+  /** Containers in the deleted zone move to `reassignTo`. */
+  deleteZone(id: string, reassignTo: string): Promise<void>
 }
 
 export type AuthState =

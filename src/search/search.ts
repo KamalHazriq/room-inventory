@@ -25,6 +25,66 @@ const NAME_CONTAINS = 1
 const ALIAS = 2
 const CODE = 3
 const NOTES = 4
+/** Last resort, and always below every exact tier. */
+const FUZZY = 5
+
+/** Below this a typo is indistinguishable from a different word: cat / car. */
+const MIN_FUZZY_LENGTH = 4
+
+function editBudget(token: string): number {
+  return token.length >= 7 ? 2 : 1
+}
+
+/**
+ * Bounded Damerau-Levenshtein, optimal string alignment variant.
+ *
+ * Swapping two adjacent letters counts as one edit, not two. That distinction
+ * is the whole point here: transposition is what thumbs actually do, and
+ * "hmdi" for "hdmi" has to stay inside a budget of one or the feature does not
+ * earn its keep.
+ *
+ * Bails out as soon as the budget is blown, which for inventory-length words is
+ * almost immediately.
+ */
+export function withinEditDistance(a: string, b: string, max: number): boolean {
+  if (Math.abs(a.length - b.length) > max) return false
+  if (a === b) return true
+
+  let twoBack: number[] = []
+  let previous = Array.from({ length: b.length + 1 }, (_, i) => i)
+
+  for (let i = 1; i <= a.length; i++) {
+    const current = [i]
+    let rowBest = i
+
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1
+      let value = Math.min(
+        previous[j] + 1, // deletion
+        current[j - 1] + 1, // insertion
+        previous[j - 1] + cost, // substitution
+      )
+
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+        value = Math.min(value, twoBack[j - 2] + 1) // transposition
+      }
+
+      current.push(value)
+      if (value < rowBest) rowBest = value
+    }
+
+    // No cell in this row is within budget, so no later row can be either.
+    if (rowBest > max) return false
+    twoBack = previous
+    previous = current
+  }
+
+  return previous[b.length] <= max
+}
+
+function words(text: string): string[] {
+  return text.toLowerCase().split(/[^a-z0-9]+/i).filter(Boolean)
+}
 
 function tokenTier(item: Item, token: string): number {
   const name = item.name.toLowerCase()
@@ -36,6 +96,19 @@ function tokenTier(item: Item, token: string): number {
   }
   if (item.containerCode.toLowerCase().includes(token)) return CODE
   if (item.notes.toLowerCase().includes(token)) return NOTES
+
+  // Nothing matched exactly. Allow for a fat-fingered word, but only against
+  // name and alias words, and only at the very bottom of the ranking, so a
+  // typo can never displace something the query actually matched.
+  if (token.length >= MIN_FUZZY_LENGTH) {
+    const budget = editBudget(token)
+    const candidates = [...words(item.name), ...item.aliases.flatMap(words)]
+    for (const word of candidates) {
+      if (word.length >= MIN_FUZZY_LENGTH && withinEditDistance(word, token, budget)) {
+        return FUZZY
+      }
+    }
+  }
 
   return NO_MATCH
 }

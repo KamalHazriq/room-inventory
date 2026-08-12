@@ -2,15 +2,8 @@ import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { CodeChip } from '../components/CodeChip'
 import { ItemRow } from '../components/ItemRow'
-import {
-  BackLink,
-  Button,
-  Field,
-  RowAction,
-  Screen,
-  SectionLabel,
-  Select,
-} from '../components/ui'
+import { ZonePicker } from '../components/ZonePicker'
+import { BackLink, Button, Field, RowAction, Screen, SectionLabel } from '../components/ui'
 import { OUT_CODE } from '../data/defaults'
 import { useInventory } from '../state/inventory'
 
@@ -128,7 +121,7 @@ export function ContainerScreen() {
               Cancel
             </button>
           </div>
-          <h1 className="mt-3 mb-6 text-xl text-ink">Edit container</h1>
+          <h1 className="mt-3 mb-6 text-xl text-ink">Edit container {container.code}</h1>
           <form
             className="space-y-5"
             onSubmit={(event) => {
@@ -155,13 +148,7 @@ export function ContainerScreen() {
               value={draftLabel}
               onChange={(event) => setDraftLabel(event.target.value)}
             />
-            <Select label="Zone" value={draftZone} onChange={setDraftZone}>
-              {zones.map((zone) => (
-                <option key={zone.id} value={zone.id}>
-                  {zone.name}
-                </option>
-              ))}
-            </Select>
+            <ZonePicker value={draftZone} onChange={setDraftZone} />
             {error ? <p className="text-sm text-muted">{error}</p> : null}
             <div className="pt-1">
               <Button type="submit" variant="primary" disabled={busy}>
@@ -182,8 +169,14 @@ export function ContainerScreen() {
         </div>
 
         <header className="mt-5 mb-8">
-          <CodeChip code={code} size="lg" />
-          <p className="mt-4 text-lg text-ink">{container?.label ?? ' '}</p>
+          {/* The chip is the heading, so it has to be one semantically too. The
+              label is read as part of it rather than as a stray line after. */}
+          <h1 aria-label={`Container ${code}${container ? `, ${container.label}` : ''}`}>
+            <CodeChip code={code} size="lg" />
+          </h1>
+          <p aria-hidden="true" className="mt-4 text-lg text-ink">
+            {container?.label ?? ' '}
+          </p>
           {zoneName ? <p className="mt-0.5 text-sm text-muted">{zoneName}</p> : null}
         </header>
 

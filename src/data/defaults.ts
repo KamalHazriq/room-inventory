@@ -15,6 +15,23 @@ export const DEFAULT_ZONES: Zone[] = [
 /** The code a container is filed under is its document id. */
 export const OUT_CODE = 'OUT'
 
+/** Where containers land when their zone is deleted. Cannot itself be deleted. */
+export const NOT_FILED_ZONE = 'not-filed'
+
+/** Zone ids are readable rather than random, so a document is legible in the console. */
+export function zoneIdFor(name: string, taken: ReadonlySet<string>): string {
+  const base =
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '') || 'zone'
+
+  if (!taken.has(base)) return base
+  let n = 2
+  while (taken.has(`${base}-${n}`)) n++
+  return `${base}-${n}`
+}
+
 export const DEFAULT_CONTAINERS: Container[] = [
   { code: 'T1', zoneId: 'trolley', label: 'Trolley tier 1', order: 1 },
   { code: 'T2', zoneId: 'trolley', label: 'Trolley tier 2', order: 2 },

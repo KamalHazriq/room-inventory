@@ -264,9 +264,10 @@ It runs [impeccable](https://github.com/pbakaus/impeccable)'s detectors too
 ## Checks
 
 ```bash
-npm test          # search ranking, CSV parsing, container moves, relative time
+npm test          # search ranking, CSV parsing, container and zone moves, time
 npm run typecheck
 npm run design-check
+npm run contrast  # WCAG audit of the tokens, both schemes
 ```
 
 All three run in CI before anything deploys.
@@ -284,9 +285,25 @@ container code or notes — in any order, and the item is ranked by its weakest
 word. A contiguous run of the whole query in the name still wins outright, so
 typing the start of a name puts it top.
 
-That means `anker charger`, `charger anker` and `black pens` all work. It is
-deliberately not fuzzy: `hmdi` will not find HDMI. Deterministic matching is
-easier to trust when you are standing in front of a box.
+That means `anker charger`, `charger anker` and `black pens` all work.
+
+If a word matches nothing exactly, it gets one more chance against the name and
+alias words, within a small edit budget — so `hmdi` finds HDMI and `scissers`
+finds Scissors. Two rules keep that from becoming noise:
+
+- A fuzzy hit sits **below every exact tier**, so a typo can never displace
+  something the query genuinely matched.
+- Words shorter than four characters are never fuzzy-matched, because at that
+  length a typo is indistinguishable from a different word — `cat` and `car`
+  are one edit apart.
+
+Swapping two adjacent letters counts as **one** edit, not two. That is the
+whole reason the feature works: transposition is what thumbs actually do, and
+under plain Levenshtein `hmdi` is two edits from `hdmi` and would fall outside
+the budget a four-letter word gets.
+
+Duplicate detection on Add item deliberately ignores fuzzy matches. Finding
+something is one question; refusing to let you add something is another.
 
 ## Offline
 
@@ -301,6 +318,55 @@ forever. `settleOrQueue` in `src/data/firebaseRepo.ts` gives the server a moment
 to object — a rules rejection arrives fast and still surfaces — then lets the
 interface move on, since the write is already in the local cache and the
 outbound queue by then.
+
+## Accessibility
+
+Every screen has an `<h1>`, focus moves to the top of the screen on navigation,
+and the search result count is announced to screen readers as you type. The
+container screen's heading carries an `aria-label` so it reads as "Container T2,
+Trolley tier 2" rather than as two letters.
+
+**One open conflict, not fixed on purpose.** `npm run contrast` audits both
+schemes against WCAG AA:
+
+```
+light
+  FAIL   4.27:1   muted on bg    labels, counts, timestamps
+```
+
+`--muted` `#71767B` on `--bg` `#F6F7F5` is **4.27:1**, just under the 4.5:1 that
+AA asks for normal text. Everything else passes in both schemes, comfortably —
+the chip is 6.97:1 and body text is 16.42:1.
+
+DESIGN-CHECK.md says tokens are law and conflicts get reported rather than
+acted on, so the token is untouched. If you want it fixed, darkening `--muted`
+by 3% to `#6E7277` reaches 4.51:1 and is imperceptible next to the current
+value. Your call — one line in `src/index.css`.
+
+Hairline dividers are excluded from the audit rather than failing it. WCAG's
+non-text contrast rule covers UI components and meaningful graphics; a
+decorative separator between two rows is neither, and the brief asks for them
+to be quiet.
+
+## Desktop keyboard
+
+The phone is the point, but bulk entry happens at a desk.
+
+| key | |
+| --- | --- |
+| `/` | jump to the search field from anywhere on the search screen |
+| `Enter` | open the top result |
+| `Escape` | clear the query |
+
+The search field also autofocuses on desktop, and deliberately does not on a
+phone, where an instant keyboard covers half the screen.
+
+## Updates
+
+The service worker uses `registerType: 'prompt'`, not `autoUpdate`. When a new
+version has downloaded, a quiet "New version ready. Reload" appears; ignoring it
+is a valid choice. The app never replaces itself while you are halfway through
+adding an item.
 
 ## Bundle
 
@@ -351,5 +417,12 @@ something you already own shows a quiet line — "You may already have this: HDM
 cable 2m in T2" — tappable straight through to the item. Name matches only; a
 word buried in someone's notes is not a duplicate.
 
-Zones are still fixed in `src/data/defaults.ts` and have no UI. Containers point
-at them, and the seed script creates them.
+**Zones are editable too.** The zone control on any container form adds, renames
+and deletes zones inline — no screen of its own, since zones change about twice
+a year. Deleting a zone moves its containers to "Not filed", which is why "Not
+filed" itself cannot be deleted. Zone ids are derived from the name
+(`Behind the door` → `behind-the-door`) so a document is legible in the console,
+with a numeric suffix if two zones ever share a name.
+
+The seed script still creates the starting zones and containers from
+`src/data/defaults.ts`.

@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "seed": "tsx scripts/seed.ts",
     "seed:dry": "tsx scripts/seed.ts --dry-run",
-    "design-check": "bash scripts/design-check.sh"
+    "design-check": "bash scripts/design-check.sh",
+    "contrast": "node scripts/contrast.mjs"
   },
   "dependencies": {
     "@fontsource-variable/instrument-sans": "^5.2.5",

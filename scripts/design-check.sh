@@ -106,6 +106,10 @@ EOF
   fi
 fi
 
+echo
+echo "Contrast (reported, not enforced — the tokens are law)"
+node scripts/contrast.mjs | sed '/^$/d'
+
 if command -v npx >/dev/null 2>&1; then
   echo
   echo "impeccable detectors"

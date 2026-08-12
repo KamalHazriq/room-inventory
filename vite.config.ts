@@ -60,7 +60,9 @@ export default defineConfig(({ command, mode }) => {
       tailwindcss(),
       spaFallback404(),
       VitePWA({
-        registerType: 'autoUpdate',
+        // 'prompt', not 'autoUpdate': the app should never replace itself while
+        // someone is halfway through adding an item. UpdateNotice offers it.
+        registerType: 'prompt',
         includeAssets: ['icons/apple-touch-icon-180.png'],
         manifest: {
           name: 'Room Inventory',

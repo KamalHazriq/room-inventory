@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { CodeChip } from '../components/CodeChip'
 import { ItemRow } from '../components/ItemRow'
 import { ThemeToggle } from '../components/ThemeToggle'
@@ -11,6 +11,7 @@ import { useInventory } from '../state/inventory'
 
 export function SearchScreen() {
   const [params, setParams] = useSearchParams()
+  const navigate = useNavigate()
   const query = params.get('q') ?? ''
   const inputRef = useRef<HTMLInputElement>(null)
   const { status, error, items, containers, liveCountFor, reload } = useInventory()
@@ -22,6 +23,27 @@ export function SearchScreen() {
     if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
       inputRef.current?.focus()
     }
+  }, [])
+
+  // "/" jumps to the search field from anywhere on this screen, the way it does
+  // in every other search-first tool. Costs nothing on a phone, where there is
+  // no keyboard to press it with.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== '/' || event.metaKey || event.ctrlKey || event.altKey) return
+      const active = document.activeElement
+      const typing =
+        active instanceof HTMLInputElement ||
+        active instanceof HTMLTextAreaElement ||
+        active instanceof HTMLSelectElement ||
+        (active instanceof HTMLElement && active.isContentEditable)
+      if (typing) return
+      event.preventDefault()
+      inputRef.current?.focus()
+      inputRef.current?.select()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
   const results = useMemo(() => searchItems(items, query), [items, query])
@@ -40,11 +62,7 @@ export function SearchScreen() {
       <div className="sticky top-0 z-10 bg-bg pt-safe">
         <Screen>
           <header className="flex items-center justify-between pt-3 pb-1">
-            {/* Edits made offline apply locally and sync later, so the only
-                thing needed here is to say so rather than to block anything. */}
-            <span className="text-sm text-muted">
-              {online ? 'Room inventory' : 'Offline — changes will sync'}
-            </span>
+            <h1 className="text-sm text-muted">Room inventory</h1>
             <ThemeToggle />
           </header>
           <div className="pb-3">
@@ -54,18 +72,47 @@ export function SearchScreen() {
               inputMode="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape' && query) {
+                  event.preventDefault()
+                  setQuery('')
+                } else if (event.key === 'Enter' && results.live[0]) {
+                  event.preventDefault()
+                  navigate(`/i/${results.live[0].id}`)
+                }
+              }}
               placeholder="Search"
               aria-label="Search items"
+              enterKeyHint="go"
               autoCapitalize="off"
               autoCorrect="off"
               spellCheck={false}
               className="min-h-[44px] w-full rounded-ui border border-rule bg-surface px-3.5 py-2.5 text-ink placeholder:text-muted"
             />
+            {/* Edits made offline apply locally and sync later, so this only
+                has to say so rather than block anything. */}
+            {!online ? (
+              <p className="pt-2 text-sm text-muted" role="status">
+                Offline — changes will sync
+              </p>
+            ) : null}
           </div>
         </Screen>
       </div>
 
       <Screen>
+        {/* Typing changes the list silently otherwise: a screen reader gets no
+            signal that anything happened. */}
+        <p aria-live="polite" className="sr-only">
+          {showContainers || status !== 'ready'
+            ? ''
+            : `${results.live.length} ${results.live.length === 1 ? 'result' : 'results'}${
+                results.gone.length > 0
+                  ? `, and ${results.gone.length} no longer had`
+                  : ''
+              }`}
+        </p>
+
         {status === 'error' ? (
           <div className="py-8">
             <p className="text-base text-ink">Could not load the inventory.</p>

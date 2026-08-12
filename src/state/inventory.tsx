@@ -16,8 +16,10 @@ import type {
   ItemPatch,
   NewContainer,
   NewItem,
+  NewZone,
   Snapshot,
   Zone,
+  ZonePatch,
 } from '../data/types'
 
 type Status = 'loading' | 'ready' | 'error'
@@ -39,6 +41,10 @@ interface InventoryValue {
   updateContainer: (code: string, patch: ContainerPatch) => Promise<void>
   renameContainer: (from: string, to: string) => Promise<void>
   deleteContainer: (code: string, reassignTo: string) => Promise<void>
+  addZone: (input: NewZone) => Promise<Zone>
+  updateZone: (id: string, patch: ZonePatch) => Promise<void>
+  deleteZone: (id: string, reassignTo: string) => Promise<void>
+  containerCountFor: (zoneId: string) => number
 }
 
 const InventoryContext = createContext<InventoryValue | null>(null)
@@ -127,9 +133,44 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     }))
   }, [])
 
+  const addZone = useCallback(async (input: NewZone) => {
+    const created = await repo.addZone(input)
+    setSnapshot((s) => ({ ...s, zones: [...s.zones, created] }))
+    return created
+  }, [])
+
+  const updateZone = useCallback(async (id: string, patch: ZonePatch) => {
+    await repo.updateZone(id, patch)
+    setSnapshot((s) => ({
+      ...s,
+      zones: s.zones.map((z) => (z.id === id ? { ...z, ...patch } : z)),
+    }))
+  }, [])
+
+  const deleteZone = useCallback(async (id: string, reassignTo: string) => {
+    await repo.deleteZone(id, reassignTo)
+    setSnapshot((s) => ({
+      ...s,
+      zones: s.zones.filter((z) => z.id !== id),
+      containers: s.containers.map((c) =>
+        c.zoneId === id ? { ...c, zoneId: reassignTo } : c,
+      ),
+    }))
+  }, [])
+
   const containers = useMemo(
     () => [...snapshot.containers].sort(compareContainers),
     [snapshot.containers],
+  )
+
+  const containerCountFor = useCallback(
+    (zoneId: string) => snapshot.containers.filter((c) => c.zoneId === zoneId).length,
+    [snapshot.containers],
+  )
+
+  const zones = useMemo(
+    () => [...snapshot.zones].sort((a, b) => a.order - b.order || a.name.localeCompare(b.name)),
+    [snapshot.zones],
   )
 
   const containerByCode = useMemo(
@@ -153,7 +194,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     () => ({
       status,
       error,
-      zones: snapshot.zones,
+      zones,
       containers,
       items: snapshot.items,
       containerByCode,
@@ -166,11 +207,15 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       updateContainer,
       renameContainer,
       deleteContainer,
+      addZone,
+      updateZone,
+      deleteZone,
+      containerCountFor,
     }),
     [
       status,
       error,
-      snapshot.zones,
+      zones,
       snapshot.items,
       containers,
       containerByCode,
@@ -183,6 +228,10 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       updateContainer,
       renameContainer,
       deleteContainer,
+      addZone,
+      updateZone,
+      deleteZone,
+      containerCountFor,
     ],
   )
 

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { GONE_THRESHOLD, likelyDuplicates, searchItems } from './search'
+import {
+  GONE_THRESHOLD,
+  likelyDuplicates,
+  searchItems,
+  withinEditDistance,
+} from './search'
 import type { Item, ItemStatus } from '../data/types'
 
 let nextId = 0
@@ -156,6 +161,76 @@ describe('searchItems', () => {
       expect(result.live).toHaveLength(GONE_THRESHOLD - 1)
       expect(result.gone.map((i) => i.name)).toEqual(['Cable D'])
     })
+  })
+})
+
+describe('withinEditDistance', () => {
+  it('accepts identical strings', () => {
+    expect(withinEditDistance('hdmi', 'hdmi', 1)).toBe(true)
+  })
+
+  it('counts an adjacent transposition as one edit', () => {
+    // Thumbs swap letters far more often than they substitute them, so this
+    // has to fit inside the budget a four-letter word gets.
+    expect(withinEditDistance('hdmi', 'hmdi', 1)).toBe(true)
+    expect(withinEditDistance('cable', 'cabel', 1)).toBe(true)
+  })
+
+  it('does not treat a non-adjacent swap as one edit', () => {
+    expect(withinEditDistance('abcd', 'dbca', 1)).toBe(false)
+  })
+
+  it('counts insertions, deletions and substitutions', () => {
+    expect(withinEditDistance('cable', 'cabl', 1)).toBe(true)
+    expect(withinEditDistance('cable', 'cablee', 1)).toBe(true)
+    expect(withinEditDistance('cable', 'coble', 1)).toBe(true)
+    expect(withinEditDistance('cable', 'cobie', 1)).toBe(false)
+  })
+
+  it('rejects on length difference alone', () => {
+    expect(withinEditDistance('a', 'abcdef', 2)).toBe(false)
+  })
+})
+
+describe('typo tolerance', () => {
+  const items = [
+    item('HDMI cable 2m'),
+    item('Precision screwdriver set'),
+    item('Anker 65W charger', { aliases: ['power adapter'] }),
+    item('Scissors'),
+  ]
+
+  it('finds a word with a transposed pair', () => {
+    expect(names(searchItems(items, 'hmdi'))).toEqual(['HDMI cable 2m'])
+    expect(names(searchItems(items, 'screwdrivre'))).toEqual(['Precision screwdriver set'])
+  })
+
+  it('finds a word with one wrong letter', () => {
+    expect(names(searchItems(items, 'scissers'))).toEqual(['Scissors'])
+    expect(names(searchItems(items, 'chargar'))).toEqual(['Anker 65W charger'])
+  })
+
+  it('tolerates a typo in an alias', () => {
+    expect(names(searchItems(items, 'adaptor'))).toEqual(['Anker 65W charger'])
+  })
+
+  it('never lets a fuzzy hit outrank an exact one', () => {
+    const pair = [item('Cablr organiser'), item('HDMI cable 2m')]
+    expect(names(searchItems(pair, 'cable'))[0]).toBe('HDMI cable 2m')
+  })
+
+  it('leaves short words alone, where a typo is just a different word', () => {
+    const short = [item('Cat toy'), item('Car charger')]
+    expect(names(searchItems(short, 'cat'))).toEqual(['Cat toy'])
+  })
+
+  it('still finds nothing when the query is not a typo of anything', () => {
+    expect(names(searchItems(items, 'trombone'))).toEqual([])
+  })
+
+  it('does not treat a near miss as a duplicate when adding', () => {
+    // Fuzzy is for finding things, not for blocking a genuinely new item.
+    expect(likelyDuplicates(items, 'Scissers')).toEqual([])
   })
 })
 

@@ -1,6 +1,6 @@
 import sampleCsv from '../../sample-data.csv?raw'
 import { parseItemsCsv } from './csv'
-import { DEFAULT_CONTAINERS, DEFAULT_ZONES } from './defaults'
+import { DEFAULT_CONTAINERS, DEFAULT_ZONES, NOT_FILED_ZONE, zoneIdFor } from './defaults'
 import type {
   AuthApi,
   AuthState,
@@ -10,8 +10,11 @@ import type {
   ItemPatch,
   NewContainer,
   NewItem,
+  NewZone,
   Repo,
   Snapshot,
+  Zone,
+  ZonePatch,
 } from './types'
 
 const STORE_KEY = 'room-inventory.local.v1'
@@ -166,6 +169,40 @@ export const localRepo: Repo = {
       item.containerCode === code ? { ...item, containerCode: reassignTo } : item,
     )
     snapshot.containers = snapshot.containers.filter((c) => c.code !== code)
+    write(snapshot)
+  },
+
+  async addZone(input: NewZone) {
+    const snapshot = read()
+    const name = input.name.trim()
+    if (!name) throw new Error('A zone needs a name.')
+    const id = input.id ?? zoneIdFor(name, new Set(snapshot.zones.map((z) => z.id)))
+    if (snapshot.zones.some((z) => z.id === id)) throw new Error(`Zone ${id} already exists.`)
+
+    const zone: Zone = { id, name, order: input.order ?? snapshot.zones.length + 1 }
+    snapshot.zones.push(zone)
+    write(snapshot)
+    return zone
+  },
+
+  async updateZone(id: string, patch: ZonePatch) {
+    const snapshot = read()
+    const at = snapshot.zones.findIndex((z) => z.id === id)
+    if (at === -1) throw new Error(`No zone ${id}`)
+    snapshot.zones[at] = { ...snapshot.zones[at], ...patch }
+    write(snapshot)
+  },
+
+  async deleteZone(id: string, reassignTo: string) {
+    if (id === NOT_FILED_ZONE) throw new Error('The "Not filed" zone cannot be deleted.')
+    const snapshot = read()
+    if (!snapshot.zones.some((z) => z.id === reassignTo)) {
+      throw new Error(`No zone ${reassignTo} to move the containers into.`)
+    }
+    snapshot.containers = snapshot.containers.map((c) =>
+      c.zoneId === id ? { ...c, zoneId: reassignTo } : c,
+    )
+    snapshot.zones = snapshot.zones.filter((z) => z.id !== id)
     write(snapshot)
   },
 }
