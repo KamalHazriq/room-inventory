@@ -168,6 +168,20 @@ Blank `status` defaults to `have`, blank `qty` to `1`. Aliases live in one
 comma-separated column, so quote them: `"charger,brick"`. Semicolons and pipes
 work too.
 
+### Rehearse it against the emulator
+
+Worth doing before pointing a 150-row spreadsheet at real data. No Google
+account, no credentials, nothing to undo:
+
+```bash
+npx firebase-tools emulators:start --only firestore --project demo-room-inventory
+# in another terminal
+FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_PROJECT_ID=demo-room-inventory npm run seed
+```
+
+The script detects `FIRESTORE_EMULATOR_HOST` and skips credentials entirely,
+since the emulator authenticates nobody.
+
 **Credentials.** The rules are locked to your UID, so the script runs with
 admin credentials instead of as that user. Either:
 

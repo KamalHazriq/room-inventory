@@ -123,7 +123,13 @@ async function main(): Promise<void> {
   }
 
   if (getApps().length === 0) {
-    if (serviceAccountPath) {
+    if (process.env.FIRESTORE_EMULATOR_HOST) {
+      // The emulator authenticates nobody, so asking for credentials here would
+      // fail for no reason. This is how the script can be exercised end to end
+      // before the Firebase project exists.
+      console.log(`Using the emulator at ${process.env.FIRESTORE_EMULATOR_HOST}`)
+      initializeApp({ projectId })
+    } else if (serviceAccountPath) {
       const key = JSON.parse(readFileSync(resolve(serviceAccountPath), 'utf8'))
       initializeApp({ credential: cert(key), projectId })
     } else {
