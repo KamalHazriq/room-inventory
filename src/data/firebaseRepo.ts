@@ -4,6 +4,7 @@ import {
   doc,
   getDocs,
   query,
+  runTransaction,
   setDoc,
   Timestamp,
   updateDoc,
@@ -62,6 +63,20 @@ function report(error: unknown): void {
 function rethrow(error: unknown): never {
   report(error)
   throw error
+}
+
+/**
+ * Turns Firestore's "unavailable" into something that says what to do.
+ *
+ * The writes that cannot be queued are the ones needing a uniqueness check,
+ * and being told to reconnect is a much better outcome than a silent overwrite.
+ */
+function offlineAware(error: unknown, action: string): Error {
+  report(error)
+  if ((error as { code?: string }).code === 'unavailable') {
+    return new Error(`No connection, so it is not safe to ${action}. Try again with a signal.`)
+  }
+  return error instanceof Error ? error : new Error(String(error))
 }
 
 /** How long to wait for a server acknowledgement before assuming we are offline. */
@@ -170,7 +185,19 @@ export const firebaseRepo: Repo = {
     await settleOrQueue(deleteDoc(doc(firestore(), 'items', id)))
   },
 
+  /**
+   * Not queued offline, and deliberately so.
+   *
+   * `setDoc` upserts, so writing straight to the code's document would silently
+   * overwrite an existing container's label, zone and order rather than fail —
+   * and the client's list of containers can be stale, so the UI check in front
+   * of this is not enough on its own. A transaction is the only way to make
+   * "create, but only if it is not already there" mean anything, and it needs
+   * the server to say so. Losing a box's metadata is worse than being told to
+   * try again with a signal.
+   */
   async addContainer(input: NewContainer): Promise<Container> {
+    const db = firestore()
     const code = input.code.toUpperCase()
     const container: Container = {
       code,
@@ -178,15 +205,22 @@ export const firebaseRepo: Repo = {
       label: input.label,
       order: input.order ?? 50,
     }
-    // The code IS the doc id, so this also enforces uniqueness.
-    await settleOrQueue(
-      setDoc(doc(firestore(), 'containers', code), {
-        zoneId: container.zoneId,
-        label: container.label,
-        order: container.order,
-      }),
-    )
-    return container
+
+    try {
+      // The code IS the document id, so this read is the uniqueness check.
+      const ref = doc(db, 'containers', code)
+      await runTransaction(db, async (tx) => {
+        if ((await tx.get(ref)).exists()) throw new Error(`${code} already exists.`)
+        tx.set(ref, {
+          zoneId: container.zoneId,
+          label: container.label,
+          order: container.order,
+        })
+      })
+      return container
+    } catch (error) {
+      throw offlineAware(error, 'add a container')
+    }
   },
 
   async updateContainer(code: string, patch: ContainerPatch): Promise<void> {
@@ -240,6 +274,7 @@ export const firebaseRepo: Repo = {
     }
   },
 
+  /** Same reasoning as addContainer: creation has to be atomic, so it needs the server. */
   async addZone(input: NewZone): Promise<Zone> {
     const db = firestore()
     const name = input.name.trim()
@@ -248,15 +283,16 @@ export const firebaseRepo: Repo = {
     try {
       const existing = await getDocs(collection(db, 'zones'))
       const id = input.id ?? zoneIdFor(name, new Set(existing.docs.map((d) => d.id)))
-      if (existing.docs.some((d) => d.id === id)) throw new Error(`Zone ${id} already exists.`)
-
       const zone: Zone = { id, name, order: input.order ?? existing.size + 1 }
-      await settleOrQueue(
-        setDoc(doc(db, 'zones', id), { name: zone.name, order: zone.order }),
-      )
+      const ref = doc(db, 'zones', id)
+
+      await runTransaction(db, async (tx) => {
+        if ((await tx.get(ref)).exists()) throw new Error(`Zone ${id} already exists.`)
+        tx.set(ref, { name: zone.name, order: zone.order })
+      })
       return zone
     } catch (error) {
-      rethrow(error)
+      throw offlineAware(error, 'add a zone')
     }
   },
 

@@ -16,7 +16,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Inventory" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <link rel="apple-touch-icon" href="./icons/apple-touch-icon-180.png" />
+    <!-- Absolute, not "./". Vite rewrites a leading slash to the configured base,
+         and a relative href would resolve against the current route: adding to
+         the Home Screen from /c/T2 would ask for /c/icons/… and get nothing. -->
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon-180.png" />
 
     <title>Room Inventory</title>
 

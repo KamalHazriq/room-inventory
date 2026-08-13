@@ -284,6 +284,19 @@ npm run design-check
 npm run contrast  # WCAG audit of the tokens, both schemes
 ```
 
+Eight of the tests are integration tests against the Firestore emulator, and
+they skip unless it is running, so CI stays free of a Java dependency:
+
+```bash
+npx firebase-tools emulators:start --only firestore --project demo-room-inventory
+FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 npm test
+```
+
+They cover the writes a unit test cannot reach — the ones whose entire purpose
+is to be atomic on the server. Note the emulator enforces `firestore.rules`, so
+point it at a permissive ruleset for these; the rules deny an unauthenticated
+client, which is exactly what they are for.
+
 `.github/workflows/checks.yml` runs all of these on every pull request and on
 every branch push; `deploy.yml` runs them again on main before deploying, so a
 direct push to main is gated too. Both also assert that a local-mode production
