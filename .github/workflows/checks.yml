@@ -2,10 +2,11 @@ name: Checks
 
 # Deploy runs these too, but it only fires on main — so without this workflow a
 # pull request would be merged having had nothing run against it at all.
+#
+# pull_request only. Adding a `push` trigger as well makes every push to a
+# branch with an open PR run this twice, for the same commit.
 on:
   pull_request:
-  push:
-    branches-ignore: [main]
   workflow_dispatch:
 
 permissions:
@@ -19,9 +20,9 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
