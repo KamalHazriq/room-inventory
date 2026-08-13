@@ -270,7 +270,11 @@ npm run design-check
 npm run contrast  # WCAG audit of the tokens, both schemes
 ```
 
-All three run in CI before anything deploys.
+`.github/workflows/checks.yml` runs all of these on every pull request and on
+every branch push; `deploy.yml` runs them again on main before deploying, so a
+direct push to main is gated too. Both also assert that a local-mode production
+build is **refused** — that bundle has no access control, and it must never
+reach Pages.
 
 The tests concentrate on the parts with real logic and real edge cases: the
 search ranking, the CSV reader, and the container operations that have to carry
