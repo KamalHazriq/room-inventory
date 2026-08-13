@@ -53,7 +53,13 @@ jobs:
           VITE_ALLOWED_UID: ${{ secrets.VITE_ALLOWED_UID }}
         run: npm run build
 
+      # enablement turns Pages on via the API using this workflow's pages:write
+      # permission. Without it the first deploy fails with "Get Pages site
+      # failed … Not Found" until someone sets Source to GitHub Actions by hand,
+      # which is a setting you cannot commit.
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       # dist/ already contains 404.html, written by vite.config.ts so that deep
       # links survive a refresh. Pages has no rewrite support.
