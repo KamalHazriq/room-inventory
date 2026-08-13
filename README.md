@@ -199,10 +199,23 @@ The project id is read from `.env`, so nothing else needs setting.
 `.github/workflows/deploy.yml` builds and deploys on every push to `main`, and
 on demand from the Actions tab.
 
-1. **Settings → Pages → Source: GitHub Actions.**
+1. **Settings → Pages → Build and deployment → Source: GitHub Actions.**
+
+   This one is manual and cannot be automated. The workflow's `pages: write`
+   permission covers *deploying* to Pages, not *creating* the Pages site, so
+   the first run fails at `configure-pages` until the setting is flipped:
+
+   ```
+   Get Pages site failed … Not Found
+   Create Pages site failed. Resource not accessible by integration
+   ```
+
+   Everything before that step still passes; only the Pages lookup fails.
+
 2. **Settings → Secrets and variables → Actions → New repository secret**, one
-   per `VITE_*` variable in the table above.
-3. Push to `main`.
+   per `VITE_*` variable in the table above. Without them the site deploys and
+   loads, but reports "Firebase is not configured".
+3. Push to `main`, or re-run the workflow from the Actions tab.
 
 The site lands at `https://kamalhazriq.github.io/room-inventory/`.
 
