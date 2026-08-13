@@ -1,0 +1,35 @@
+rules_version = '2';
+
+// One user, one UID. Paste yours below and publish.
+//
+// Firebase console → Authentication → Users → the User UID column. Sign in to
+// the deployed app once first, so the account exists to copy a UID from.
+//
+// This runs on Google's servers, so it is the only thing standing between a
+// public URL and private data. Nothing in the client bundle is access control.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner() {
+      return request.auth != null
+          && request.auth.uid == 'PASTE_YOUR_UID_HERE';
+    }
+
+    match /zones/{zoneId} {
+      allow read, write: if isOwner();
+    }
+
+    match /containers/{code} {
+      allow read, write: if isOwner();
+    }
+
+    match /items/{itemId} {
+      allow read, write: if isOwner();
+    }
+
+    // Anything not named above is denied outright.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

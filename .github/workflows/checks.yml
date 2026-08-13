@@ -1,0 +1,54 @@
+name: Checks
+
+# Deploy runs these too, but it only fires on main — so without this workflow a
+# pull request would be merged having had nothing run against it at all.
+#
+# pull_request only. Adding a `push` trigger as well makes every push to a
+# branch with an open PR run this twice, for the same commit.
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Design check
+        run: npm run design-check
+
+      # No Firebase config here on purpose: the bundle has to compile without
+      # it, and a missing config is a runtime message rather than a build error.
+      - name: Build
+        run: npm run build
+
+      # The one invariant worth failing a pull request over: a local-mode bundle
+      # has no access control, so the build must refuse to produce one.
+      - name: Local-mode build must be refused
+        run: |
+          if VITE_DATA_MODE=local npm run build > /dev/null 2>&1; then
+            echo "::error::vite.config.ts built a local-mode bundle. That bundle has no access control."
+            exit 1
+          fi
+          echo "Refused, as expected."
