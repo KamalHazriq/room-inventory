@@ -115,6 +115,35 @@ describeIfEmulator('firebaseRepo against the emulator', () => {
     })
   })
 
+  describe('deleteZone', () => {
+    it('refuses a destination that does not exist', async () => {
+      await setDoc(doc(db, 'zones', 'trolley'), { name: 'Trolley', order: 1 })
+      await setDoc(doc(db, 'containers', 'T1'), { label: 'Tier 1', zoneId: 'trolley', order: 1 })
+
+      await expect(firebaseRepo.deleteZone('trolley', 'nope')).rejects.toThrow(/nope/)
+
+      expect((await getDoc(doc(db, 'zones', 'trolley'))).exists()).toBe(true)
+      expect((await getDoc(doc(db, 'containers', 'T1'))).data()?.zoneId).toBe('trolley')
+    })
+
+    it('refuses to delete the zone everything else falls back to', async () => {
+      await expect(firebaseRepo.deleteZone('not-filed', 'trolley')).rejects.toThrow(
+        /cannot be deleted/i,
+      )
+    })
+
+    it('refiles the containers rather than orphaning them', async () => {
+      await setDoc(doc(db, 'zones', 'trolley'), { name: 'Trolley', order: 1 })
+      await setDoc(doc(db, 'zones', 'not-filed'), { name: 'Not filed', order: 99 })
+      await setDoc(doc(db, 'containers', 'T1'), { label: 'Tier 1', zoneId: 'trolley', order: 1 })
+
+      await firebaseRepo.deleteZone('trolley', 'not-filed')
+
+      expect((await getDoc(doc(db, 'zones', 'trolley'))).exists()).toBe(false)
+      expect((await getDoc(doc(db, 'containers', 'T1'))).data()?.zoneId).toBe('not-filed')
+    })
+  })
+
   describe('renameContainer', () => {
     it('moves the container and every item inside it', async () => {
       await setDoc(doc(db, 'containers', 'T7'), { label: 'Tier 7', zoneId: 'trolley', order: 7 })
@@ -141,6 +170,22 @@ describeIfEmulator('firebaseRepo against the emulator', () => {
   })
 
   describe('deleteContainer', () => {
+    it('refuses a destination that does not exist', async () => {
+      // localRepo threw here and firebaseRepo did not, so the same call lost
+      // items in one implementation and was rejected in the other. Refiling
+      // into a code with no container hides them from every screen while they
+      // still count as owned — worse than deleting them outright.
+      await setDoc(doc(db, 'containers', 'T9'), { label: 'Tier 9', zoneId: 'trolley', order: 9 })
+      const item = await firebaseRepo.addItem({
+        name: 'Stray', aliases: [], containerCode: 'T9', qty: 1, notes: '',
+      })
+
+      await expect(firebaseRepo.deleteContainer('T9', 'NOPE')).rejects.toThrow(/NOPE/)
+
+      expect((await getDoc(doc(db, 'containers', 'T9'))).exists()).toBe(true)
+      expect((await getDoc(doc(db, 'items', item.id))).data()?.containerCode).toBe('T9')
+    })
+
     it('refiles the contents rather than orphaning them', async () => {
       await setDoc(doc(db, 'containers', 'T9'), { label: 'Tier 9', zoneId: 'trolley', order: 9 })
       await setDoc(doc(db, 'containers', 'OUT'), { label: 'Out of storage', zoneId: 'not-filed', order: 99 })
