@@ -199,10 +199,23 @@ The project id is read from `.env`, so nothing else needs setting.
 `.github/workflows/deploy.yml` builds and deploys on every push to `main`, and
 on demand from the Actions tab.
 
-1. **Settings → Pages → Source: GitHub Actions.**
+1. **Settings → Pages → Build and deployment → Source: GitHub Actions.**
+
+   This one is manual and cannot be automated. The workflow's `pages: write`
+   permission covers *deploying* to Pages, not *creating* the Pages site, so
+   the first run fails at `configure-pages` until the setting is flipped:
+
+   ```
+   Get Pages site failed … Not Found
+   Create Pages site failed. Resource not accessible by integration
+   ```
+
+   Everything before that step still passes; only the Pages lookup fails.
+
 2. **Settings → Secrets and variables → Actions → New repository secret**, one
-   per `VITE_*` variable in the table above.
-3. Push to `main`.
+   per `VITE_*` variable in the table above. Without them the site deploys and
+   loads, but reports "Firebase is not configured".
+3. Push to `main`, or re-run the workflow from the Actions tab.
 
 The site lands at `https://kamalhazriq.github.io/room-inventory/`.
 
@@ -284,7 +297,7 @@ npm run design-check
 npm run contrast  # WCAG audit of the tokens, both schemes
 ```
 
-Eight of the tests are integration tests against the Firestore emulator, and
+Some of the tests are integration tests against the Firestore emulator, and
 they skip unless it is running, so CI stays free of a Java dependency:
 
 ```bash
@@ -292,10 +305,24 @@ npx firebase-tools emulators:start --only firestore --project demo-room-inventor
 FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 npm test
 ```
 
-They cover the writes a unit test cannot reach — the ones whose entire purpose
-is to be atomic on the server. Note the emulator enforces `firestore.rules`, so
-point it at a permissive ruleset for these; the rules deny an unauthenticated
-client, which is exactly what they are for.
+They cover two things a unit test cannot reach.
+
+**The writes whose entire purpose is to be atomic on the server** — creating a
+container or zone, renaming a code, deleting one. Note the emulator enforces
+`firestore.rules`, so point it at a permissive ruleset for these; the real rules
+deny an unauthenticated client, which is exactly what they are for.
+
+**The rules themselves.** `src/data/firestoreRules.test.ts` loads the committed
+`firestore.rules`, substitutes a test UID for the placeholder, and checks both
+directions: the owner is let in, a different Google account is denied every read
+and every write, a signed-out visitor is denied, and even the owner is refused
+on a collection the rules do not name. It runs under its own project id so the
+locked ruleset cannot leak into the tests above.
+
+That file is the only access control in the whole system — the URL, the bundle
+and the API key are all public — so "nobody else can read it" is worth proving
+rather than assuming. Removing the UID check from the rules fails seven of
+those tests.
 
 `.github/workflows/checks.yml` runs all of these on every pull request and on
 every branch push; `deploy.yml` runs them again on main before deploying, so a

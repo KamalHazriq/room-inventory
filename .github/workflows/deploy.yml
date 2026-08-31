@@ -53,10 +53,18 @@ jobs:
           VITE_ALLOWED_UID: ${{ secrets.VITE_ALLOWED_UID }}
         run: npm run build
 
-      # enablement turns Pages on via the API using this workflow's pages:write
-      # permission. Without it the first deploy fails with "Get Pages site
-      # failed … Not Found" until someone sets Source to GitHub Actions by hand,
-      # which is a setting you cannot commit.
+      # ONE-TIME MANUAL STEP, and there is no way around it:
+      #   Settings → Pages → Build and deployment → Source: GitHub Actions
+      #
+      # Until that is set, this step fails with:
+      #   Get Pages site failed … Not Found
+      #
+      # `enablement: true` asks the API to create the site instead, which the
+      # automatic GITHUB_TOKEN is not allowed to do — it fails with "Create
+      # Pages site failed. Resource not accessible by integration". pages:write
+      # grants deploying to Pages, not creating the site. It is left on because
+      # it does work for a token that has the scope, and it is a no-op once the
+      # site exists.
       - uses: actions/configure-pages@v5
         with:
           enablement: true

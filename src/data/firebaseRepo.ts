@@ -2,6 +2,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   query,
   runTransaction,
@@ -259,9 +260,17 @@ export const firebaseRepo: Repo = {
     const db = firestore()
 
     try {
-      const contents = await getDocs(
-        query(collection(db, 'items'), where('containerCode', '==', code)),
-      )
+      // Without this the contents are refiled into a code that does not exist,
+      // which loses them more thoroughly than deleting them would: they stop
+      // appearing in every container view while still counting as owned.
+      const [destination, contents] = await Promise.all([
+        getDoc(doc(db, 'containers', reassignTo)),
+        getDocs(query(collection(db, 'items'), where('containerCode', '==', code))),
+      ])
+
+      if (!destination.exists()) {
+        throw new Error(`No container ${reassignTo} to move the contents into.`)
+      }
 
       const batch = writeBatch(db)
       for (const item of contents.docs) {
@@ -305,9 +314,14 @@ export const firebaseRepo: Repo = {
     const db = firestore()
 
     try {
-      const affected = await getDocs(
-        query(collection(db, 'containers'), where('zoneId', '==', id)),
-      )
+      const [destination, affected] = await Promise.all([
+        getDoc(doc(db, 'zones', reassignTo)),
+        getDocs(query(collection(db, 'containers'), where('zoneId', '==', id))),
+      ])
+
+      if (!destination.exists()) {
+        throw new Error(`No zone ${reassignTo} to move the containers into.`)
+      }
 
       const batch = writeBatch(db)
       for (const container of affected.docs) {
